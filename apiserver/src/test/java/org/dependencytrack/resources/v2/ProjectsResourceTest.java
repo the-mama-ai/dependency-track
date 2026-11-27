@@ -45,6 +45,8 @@ import org.dependencytrack.pkgmetadata.PackageMetadataDao;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import jakarta.json.JsonObject;
 import jakarta.ws.rs.client.Entity;
@@ -53,6 +55,7 @@ import jakarta.ws.rs.core.Response;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -986,6 +989,138 @@ public class ProjectsResourceTest extends ResourceTest {
     }
 
     @Test
+    public void listProjectsSearchTextTest() {
+        initializeWithPermissions(Permissions.VIEW_PORTFOLIO);
+
+        final var nameMatch = new Project();
+        nameMatch.setName("my-ACME-app");
+        qm.persist(nameMatch);
+
+        final var tagMatch = new Project();
+        tagMatch.setName("tagged");
+        qm.persist(tagMatch);
+        qm.bind(tagMatch, List.of(qm.createTag("acme")));
+
+        final var tagPrefixOnly = new Project();
+        tagPrefixOnly.setName("tagged-prefix");
+        qm.persist(tagPrefixOnly);
+        qm.bind(tagPrefixOnly, List.of(qm.createTag("acme-extra")));
+
+        final var noMatch = new Project();
+        noMatch.setName("unrelated");
+        qm.persist(noMatch);
+
+        // Name substring OR exact tag, both case-insensitive.
+        Response response = jersey.target("/projects")
+                .queryParam("q", " Acme ")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .inPath("$.items[*].name")
+                .isArray()
+                .containsExactlyInAnyOrder("my-ACME-app", "tagged");
+
+        // Combined with other filters using AND.
+        response = jersey.target("/projects")
+                .queryParam("q", "acme")
+                .queryParam("tags_all", "acme")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .inPath("$.items[*].name")
+                .isArray()
+                .containsExactly("tagged");
+
+        // LIKE wildcards are matched literally.
+        response = jersey.target("/projects")
+                .queryParam("q", "%")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .inPath("$.items[*].name")
+                .isArray()
+                .isEmpty();
+
+        // Whitespace-only is ignored.
+        response = jersey.target("/projects")
+                .queryParam("q", "  ")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response)).inPath("$.total.count").isEqualTo(4);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "version, ASC, 'p-a,p-b,p-c,p-null'",
+        "version, DESC, 'p-null,p-c,p-b,p-a'",
+        "classifier, ASC, 'p-a,p-b,p-c,p-null'",
+        "classifier, DESC, 'p-null,p-c,p-b,p-a'",
+        "last_bom_import_format, ASC, 'p-a,p-b,p-c,p-null'",
+        "last_bom_import_format, DESC, 'p-null,p-c,p-b,p-a'",
+        "is_latest, ASC, 'p-a,p-null,p-b,p-c'",
+        "is_latest, DESC, 'p-c,p-a,p-null,p-b'",
+    })
+    public void listProjectsSortAndPaginateTest(final String sortBy, final String direction, final String expected) {
+        initializeWithPermissions(Permissions.VIEW_PORTFOLIO);
+
+        // Persisted in an order that differs from every expected sort order,
+        // so that the tiebreaker on ID is not mistaken for correct sorting.
+        final var c = new Project();
+        c.setName("p-c");
+        c.setVersion("3.0.0");
+        c.setClassifier(Classifier.LIBRARY);
+        c.setLastBomImportFormat("SPDX");
+        c.setIsLatest(true);
+        qm.persist(c);
+
+        final var a = new Project();
+        a.setName("p-a");
+        a.setVersion("1.0.0");
+        a.setClassifier(Classifier.APPLICATION);
+        a.setLastBomImportFormat("CycloneDX 1.5");
+        qm.persist(a);
+
+        final var nul = new Project();
+        nul.setName("p-null");
+        qm.persist(nul);
+
+        final var b = new Project();
+        b.setName("p-b");
+        b.setVersion("2.0.0");
+        b.setClassifier(Classifier.CONTAINER);
+        b.setLastBomImportFormat("CycloneDX 1.6");
+        qm.persist(b);
+
+        // Walk one item per page to exercise the cursor for every position,
+        // including the transitions between null and non-null values.
+        final var names = new ArrayList<String>();
+        String pageToken = null;
+        do {
+            var target = jersey.target("/projects").queryParam("limit", 1);
+            target = pageToken == null
+                    ? target.queryParam("sort_by", sortBy).queryParam("sort_direction", direction)
+                    : target.queryParam("page_token", pageToken);
+            final Response response =
+                    target.request().header(X_API_KEY, apiKey).get();
+            assertThat(response.getStatus()).isEqualTo(200);
+            final JsonObject page = parseJsonObject(response);
+            page.getJsonArray("items")
+                    .forEach(item -> names.add(item.asJsonObject().getString("name")));
+            pageToken = page.containsKey("next_page_token") ? page.getString("next_page_token") : null;
+        } while (pageToken != null && names.size() <= 4);
+
+        assertThat(names).containsExactly(expected.split(","));
+    }
+
+    @Test
     public void listProjectsPropertyFilterTest() {
         initializeWithPermissions(Permissions.VIEW_PORTFOLIO);
 
@@ -1090,7 +1225,16 @@ public class ProjectsResourceTest extends ResourceTest {
                   "title": "Invalid sort field",
                   "detail": "Sorting by field 'invalid_field' is not supported",
                   "invalid_field": "invalid_field",
-                  "supported_fields": ["name", "group", "version", "classifier", "last_bom_import", "last_inherited_risk_score"]
+                  "supported_fields": [
+                    "name",
+                    "group",
+                    "version",
+                    "classifier",
+                    "is_latest",
+                    "last_bom_import",
+                    "last_bom_import_format",
+                    "last_inherited_risk_score"
+                  ]
                 }
                 """);
     }

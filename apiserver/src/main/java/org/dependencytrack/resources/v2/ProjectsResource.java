@@ -92,6 +92,7 @@ public class ProjectsResource extends AbstractApiResource implements ProjectsApi
     @Override
     @PermissionRequired(Permissions.Constants.VIEW_PORTFOLIO)
     public Response listProjects(
+            final String q,
             final String nameContains,
             final String versionContains,
             final List<String> tagsAll,
@@ -127,7 +128,11 @@ public class ProjectsResource extends AbstractApiResource implements ProjectsApi
                         case null -> null;
                         case "name" -> ListAllProjectsQuery.SortBy.NAME;
                         case "group" -> ListAllProjectsQuery.SortBy.GROUP;
+                        case "version" -> ListAllProjectsQuery.SortBy.VERSION;
+                        case "classifier" -> ListAllProjectsQuery.SortBy.CLASSIFIER;
+                        case "is_latest" -> ListAllProjectsQuery.SortBy.IS_LATEST;
                         case "last_bom_import" -> ListAllProjectsQuery.SortBy.LAST_BOM_IMPORTED;
+                        case "last_bom_import_format" -> ListAllProjectsQuery.SortBy.LAST_BOM_IMPORTED_FORMAT;
                         case "last_inherited_risk_score" -> ListAllProjectsQuery.SortBy.LAST_RISKSCORE;
                         default ->
                             throw new InvalidSortFieldException(
@@ -137,12 +142,15 @@ public class ProjectsResource extends AbstractApiResource implements ProjectsApi
                                             "group",
                                             "version",
                                             "classifier",
+                                            "is_latest",
                                             "last_bom_import",
+                                            "last_bom_import_format",
                                             "last_inherited_risk_score"));
                     };
 
             final Page<ProjectDao.ListProjectsRowV2> projectsPage = handle.attach(ProjectDao.class)
                     .listAllProjects(new ListAllProjectsQuery(
+                            StringUtils.trimToNull(q),
                             StringUtils.trimToNull(nameContains),
                             StringUtils.trimToNull(versionContains),
                             tagsAll,

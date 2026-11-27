@@ -33,7 +33,11 @@ get:
 
     * `name`
     * `group`
+    * `version`
+    * `classifier`
+    * `is_latest`
     * `last_bom_import`
+    * `last_bom_import_format`
     * `last_inherited_risk_score`
 
     ### Expandable fields
@@ -48,6 +52,19 @@ get:
   tags:
     - Projects
   parameters:
+    - name: q
+      in: query
+      description: |-
+        Optional free-text search term.
+
+        Matches projects whose `name` contains the given value, or that have a tag
+        whose name equals the given value (both case-insensitive).
+
+        Leading and trailing whitespace is ignored. Values that are empty or
+        whitespace-only are treated as if the parameter was omitted.
+      schema:
+        type: string
+        maxLength: 255
     - name: name_contains
       in: query
       description: |-

@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record ListAllProjectsQuery(
+        @Nullable String searchText,
         @Nullable String nameContains,
         @Nullable String versionContains,
         @Nullable List<String> tags,
@@ -51,9 +52,14 @@ public record ListAllProjectsQuery(
     public record PropertyFilter(String group, String name, @Nullable String value) {}
 
     public enum SortBy {
+        // NB: Constant names other than LAST_RISKSCORE double as "PROJECT" column names.
         NAME,
         GROUP,
+        VERSION,
+        CLASSIFIER,
+        IS_LATEST,
         LAST_BOM_IMPORTED,
+        LAST_BOM_IMPORTED_FORMAT,
         LAST_RISKSCORE
     }
 
@@ -61,7 +67,11 @@ public record ListAllProjectsQuery(
             long lastId,
             @Nullable String lastName,
             @Nullable String lastGroup,
+            @Nullable String lastVersion,
+            @Nullable String lastClassifier,
+            @Nullable Boolean lastIsLatest,
             @Nullable Long lastBomImport,
+            @Nullable String lastBomImportFormat,
             @Nullable Double lastInheritedRiskScore,
             @Nullable SortBy sortBy,
             @Nullable SortDirection sortDirection,

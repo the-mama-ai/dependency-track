@@ -754,6 +754,22 @@ public interface ProjectDao extends SqlObject, PaginationSupport {
         final var queryParams = new HashMap<String, Object>();
         whereConditions.add("TRUE");
 
+        if (query.searchText() != null) {
+            whereConditions.add(/* language=SQL */ """
+                    (
+                      LOWER("PROJECT"."NAME") LIKE ('%' || LOWER(:searchTextLike) || '%') ESCAPE '!'
+                      OR EXISTS (
+                        SELECT 1
+                          FROM "PROJECTS_TAGS"
+                         INNER JOIN "TAG"
+                            ON "TAG"."ID" = "PROJECTS_TAGS"."TAG_ID"
+                         WHERE "PROJECTS_TAGS"."PROJECT_ID" = "PROJECT"."ID"
+                           AND LOWER("TAG"."NAME") = LOWER(:searchText)
+                      )
+                    )""");
+            queryParams.put("searchText", query.searchText());
+            queryParams.put("searchTextLike", escapeLikePattern(query.searchText()));
+        }
         if (query.nameContains() != null) {
             whereConditions.add("LOWER(\"PROJECT\".\"NAME\") LIKE ('%' || LOWER(:nameContains) || '%') ESCAPE '!'");
             queryParams.put("nameContains", escapeLikePattern(query.nameContains()));
@@ -881,10 +897,14 @@ public interface ProjectDao extends SqlObject, PaginationSupport {
                         switch (effectiveSortBy) {
                             case NAME -> decodedPageToken.lastName();
                             case GROUP -> decodedPageToken.lastGroup();
+                            case VERSION -> decodedPageToken.lastVersion();
+                            case CLASSIFIER -> decodedPageToken.lastClassifier();
+                            case IS_LATEST -> decodedPageToken.lastIsLatest();
                             case LAST_BOM_IMPORTED ->
                                 decodedPageToken.lastBomImport() != null
                                         ? Instant.ofEpochMilli(decodedPageToken.lastBomImport())
                                         : null;
+                            case LAST_BOM_IMPORTED_FORMAT -> decodedPageToken.lastBomImportFormat();
                             case LAST_RISKSCORE -> decodedPageToken.lastInheritedRiskScore();
                         });
             } else {
@@ -921,9 +941,18 @@ public interface ProjectDao extends SqlObject, PaginationSupport {
                         lastRow.id(),
                         effectiveSortBy == ListAllProjectsQuery.SortBy.NAME ? lastRow.name() : null,
                         effectiveSortBy == ListAllProjectsQuery.SortBy.GROUP ? lastRow.group() : null,
+                        effectiveSortBy == ListAllProjectsQuery.SortBy.VERSION ? lastRow.version() : null,
+                        effectiveSortBy == ListAllProjectsQuery.SortBy.CLASSIFIER
+                                        && lastRow.classifier() != null
+                                ? lastRow.classifier().name()
+                                : null,
+                        effectiveSortBy == ListAllProjectsQuery.SortBy.IS_LATEST ? lastRow.isLatest() : null,
                         effectiveSortBy == ListAllProjectsQuery.SortBy.LAST_BOM_IMPORTED
                                         && lastRow.lastBomImport() != null
                                 ? lastRow.lastBomImport().getTime()
+                                : null,
+                        effectiveSortBy == ListAllProjectsQuery.SortBy.LAST_BOM_IMPORTED_FORMAT
+                                ? lastRow.lastBomImportFormat()
                                 : null,
                         effectiveSortBy == ListAllProjectsQuery.SortBy.LAST_RISKSCORE
                                 ? lastRow.lastInheritedRiskScore()
@@ -1019,6 +1048,7 @@ public interface ProjectDao extends SqlObject, PaginationSupport {
             <#assign castedLastSortValue>
                 <#if sortByColumn?has_content && sortByColumn == "LAST_BOM_IMPORTED">CAST(:lastSortValue AS TIMESTAMPTZ)
                 <#elseif sortByColumn?has_content && sortByColumn == "LAST_RISKSCORE">CAST(:lastSortValue AS DOUBLE PRECISION)
+                <#elseif sortByColumn?has_content && sortByColumn == "IS_LATEST">CAST(:lastSortValue AS BOOLEAN)
                 <#else>CAST(:lastSortValue AS TEXT)
                 </#if>
             </#assign>
