@@ -14,7 +14,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) OWASP Foundation. All Rights Reserved.
-FROM eclipse-temurin:25-alpine
+FROM docker.io/library/eclipse-temurin:25-alpine
 WORKDIR /
 COPY ./target/dex-benchmark.jar /app.jar
 ENTRYPOINT [ \

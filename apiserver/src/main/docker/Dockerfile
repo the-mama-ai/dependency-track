@@ -24,7 +24,7 @@ ARG DATA_DIR=/data/
 ARG UID=1000
 ARG GID=1000
 
-FROM eclipse-temurin:25.0.5_8-jdk-alpine@sha256:c7c3d0bdf7f2bbc5a05a6712ed334d198360105634ea9adf76fca94f381b1e3f AS jre-build
+FROM docker.io/library/eclipse-temurin:25.0.5_8-jdk-alpine@sha256:c7c3d0bdf7f2bbc5a05a6712ed334d198360105634ea9adf76fca94f381b1e3f AS jre-build
 
 WORKDIR /work
 
@@ -34,7 +34,7 @@ COPY ./target/dependency-track-apiserver.jar ./
 
 RUN ./create-jre.sh -i ./dependency-track-apiserver.jar -o ./jre
 
-FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+FROM docker.io/library/alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 ARG COMMIT_SHA
 ARG APP_VERSION
