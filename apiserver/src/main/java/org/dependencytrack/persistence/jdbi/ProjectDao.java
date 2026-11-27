@@ -844,6 +844,26 @@ public interface ProjectDao extends SqlObject, PaginationSupport {
             whereConditions.add("\"PROJECT\".\"CLASSIFIER\" = ANY(:classifiers)");
             queryParams.put("classifiers", query.classifiers().toArray(String[]::new));
         }
+        final ListAllProjectsQuery.PropertyFilter property = query.property();
+        if (property != null) {
+            String propertyCondition = """
+                    EXISTS (
+                      SELECT 1
+                        FROM "PROJECT_PROPERTY"
+                       WHERE "PROJECT_PROPERTY"."PROJECT_ID" = "PROJECT"."ID"
+                         AND LOWER("PROJECT_PROPERTY"."GROUPNAME") = LOWER(:propertyGroup)
+                         AND LOWER("PROJECT_PROPERTY"."PROPERTYNAME") = LOWER(:propertyName)""";
+            queryParams.put("propertyGroup", property.group());
+            queryParams.put("propertyName", property.name());
+            final String propertyValue = property.value();
+            if (propertyValue != null) {
+                propertyCondition += """
+
+                         AND LOWER("PROJECT_PROPERTY"."PROPERTYVALUE") = LOWER(:propertyValue)""";
+                queryParams.put("propertyValue", propertyValue);
+            }
+            whereConditions.add(propertyCondition + "\n)");
+        }
 
         return withJitDisabled(() -> {
             final TotalCount totalCount;

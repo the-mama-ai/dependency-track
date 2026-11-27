@@ -39,6 +39,7 @@ public record ListAllProjectsQuery(
         @Nullable Instant lastBomImportSince,
         @Nullable Instant lastBomImportBefore,
         @Nullable List<String> classifiers,
+        @Nullable PropertyFilter property,
         boolean includeMetrics,
         boolean includeParent,
         boolean includeTeams,
@@ -46,6 +47,8 @@ public record ListAllProjectsQuery(
         @Nullable String pageToken,
         @Nullable SortBy sortBy,
         @Nullable SortDirection sortDirection) {
+
+    public record PropertyFilter(String group, String name, @Nullable String value) {}
 
     public enum SortBy {
         NAME,

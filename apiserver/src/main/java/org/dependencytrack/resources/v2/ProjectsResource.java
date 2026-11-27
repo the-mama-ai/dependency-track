@@ -55,6 +55,7 @@ import org.owasp.security.logging.SecurityMarkers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
@@ -103,6 +104,9 @@ public class ProjectsResource extends AbstractApiResource implements ProjectsApi
             final Long lastBomImportSince,
             final Long lastBomImportBefore,
             final List<Classifier> classifier,
+            final String propertyGroup,
+            final String propertyName,
+            final String propertyValue,
             final List<String> expand,
             final Integer limit,
             final String pageToken,
@@ -114,6 +118,8 @@ public class ProjectsResource extends AbstractApiResource implements ProjectsApi
         final boolean expandParent = hasExpand && expand.contains("parent");
         final boolean expandTeams = hasExpand && expand.contains("teams");
         final List<String> classifiers = normalizeClassifierFilter(classifier);
+        final ListAllProjectsQuery.PropertyFilter propertyFilter =
+                createPropertyFilter(propertyGroup, propertyName, propertyValue);
 
         return withJdbiHandle(getAlpineRequest(), handle -> {
             final ListAllProjectsQuery.SortBy sortByEnum =
@@ -153,6 +159,7 @@ public class ProjectsResource extends AbstractApiResource implements ProjectsApi
                             lastBomImportSince != null ? Instant.ofEpochMilli(lastBomImportSince) : null,
                             lastBomImportBefore != null ? Instant.ofEpochMilli(lastBomImportBefore) : null,
                             classifiers,
+                            propertyFilter,
                             expandMetrics,
                             expandParent,
                             expandTeams,
@@ -391,6 +398,25 @@ public class ProjectsResource extends AbstractApiResource implements ProjectsApi
                         .build())
                 .entity(CloneProjectResponse.builder().uuid(clonedProjectUuid).build())
                 .build();
+    }
+
+    private static ListAllProjectsQuery.PropertyFilter createPropertyFilter(
+            final String group, final String name, final String value) {
+        final String trimmedGroup = StringUtils.trimToNull(group);
+        final String trimmedName = StringUtils.trimToNull(name);
+        final String trimmedValue = StringUtils.trimToNull(value);
+
+        if (trimmedGroup == null && trimmedName == null) {
+            if (trimmedValue != null) {
+                throw new BadRequestException("property_value requires property_group and property_name");
+            }
+            return null;
+        }
+        if (trimmedGroup == null || trimmedName == null) {
+            throw new BadRequestException("property_group and property_name must be provided together");
+        }
+
+        return new ListAllProjectsQuery.PropertyFilter(trimmedGroup, trimmedName, trimmedValue);
     }
 
     private static List<String> normalizeClassifierFilter(final List<Classifier> classifier) {

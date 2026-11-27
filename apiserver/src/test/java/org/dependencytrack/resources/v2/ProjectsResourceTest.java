@@ -18,6 +18,7 @@
  */
 package org.dependencytrack.resources.v2;
 
+import alpine.model.IConfigProperty.PropertyType;
 import com.github.packageurl.PackageURL;
 import org.dependencytrack.JerseyTestExtension;
 import org.dependencytrack.ResourceTest;
@@ -35,6 +36,8 @@ import org.dependencytrack.model.ServiceComponent;
 import org.dependencytrack.model.Severity;
 import org.dependencytrack.model.Vulnerability;
 import org.dependencytrack.persistence.jdbi.MetricsTestDao;
+import org.dependencytrack.persistence.jdbi.ProjectPropertyDao;
+import org.dependencytrack.persistence.jdbi.ProjectPropertyDao.ProjectPropertyRow;
 import org.dependencytrack.pkgmetadata.PackageArtifactMetadata;
 import org.dependencytrack.pkgmetadata.PackageArtifactMetadataDao;
 import org.dependencytrack.pkgmetadata.PackageMetadata;
@@ -976,6 +979,93 @@ public class ProjectsResourceTest extends ResourceTest {
 
         response = jersey.target("/projects")
                 .queryParam("classifier", "invalid")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    public void listProjectsPropertyFilterTest() {
+        initializeWithPermissions(Permissions.VIEW_PORTFOLIO);
+
+        final var projectA = new Project();
+        projectA.setName("project-a");
+        qm.persist(projectA);
+
+        final var projectB = new Project();
+        projectB.setName("project-b");
+        qm.persist(projectB);
+
+        final var projectC = new Project();
+        projectC.setName("project-c");
+        qm.persist(projectC);
+
+        useJdbiHandle(handle -> {
+            final var dao = handle.attach(ProjectPropertyDao.class);
+            dao.createProperty(
+                    projectA.getUuid(),
+                    new ProjectPropertyRow("Integrations", "engagement.id", "42", PropertyType.STRING, null));
+            dao.createProperty(
+                    projectB.getUuid(),
+                    new ProjectPropertyRow("integrations", "engagement.id", "666", PropertyType.STRING, null));
+            dao.createProperty(
+                    projectC.getUuid(),
+                    new ProjectPropertyRow("integrations", "other", "42", PropertyType.STRING, null));
+        });
+
+        // Existence only, case-insensitive group match.
+        Response response = jersey.target("/projects")
+                .queryParam("property_group", "integrations")
+                .queryParam("property_name", "engagement.id")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .inPath("$.items[*].name")
+                .isArray()
+                .containsExactlyInAnyOrder("project-a", "project-b");
+
+        // Value match.
+        response = jersey.target("/projects")
+                .queryParam("property_group", "INTEGRATIONS")
+                .queryParam("property_name", "ENGAGEMENT.ID")
+                .queryParam("property_value", "42")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .inPath("$.items[*].name")
+                .isArray()
+                .containsExactly("project-a");
+
+        // Value must belong to the same property, not just any property of the project.
+        response = jersey.target("/projects")
+                .queryParam("property_group", "integrations")
+                .queryParam("property_name", "other")
+                .queryParam("property_value", "666")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .inPath("$.items[*].name")
+                .isArray()
+                .isEmpty();
+
+        // Name without group.
+        response = jersey.target("/projects")
+                .queryParam("property_name", "engagement.id")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(400);
+
+        // Value without group and name.
+        response = jersey.target("/projects")
+                .queryParam("property_value", "42")
                 .request()
                 .header(X_API_KEY, apiKey)
                 .get();

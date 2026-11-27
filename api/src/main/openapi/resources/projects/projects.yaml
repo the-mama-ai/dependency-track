@@ -165,6 +165,35 @@ get:
           $ref: "../../shared/schemas/classifier.yaml"
       style: form
       explode: true
+    - name: property_group
+      in: query
+      description: |-
+        Filter by project property group (exact match, case-insensitive).
+
+        Must be provided together with `property_name`. Without `property_value`,
+        returns projects that have the property, regardless of its value.
+      schema:
+        type: string
+        maxLength: 255
+    - name: property_name
+      in: query
+      description: |-
+        Filter by project property name (exact match, case-insensitive).
+
+        Must be provided together with `property_group`.
+      schema:
+        type: string
+        maxLength: 255
+    - name: property_value
+      in: query
+      description: |-
+        Filter by the value of the property identified by `property_group`
+        and `property_name` (exact match, case-insensitive).
+
+        Requires `property_group` and `property_name`.
+      schema:
+        type: string
+        maxLength: 1024
     - name: expand
       in: query
       description: Optional fields to include in each project response item. Unknown values are silently ignored.
