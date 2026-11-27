@@ -18,6 +18,7 @@
  */
 package org.dependencytrack.persistence.jdbi;
 
+import alpine.model.IConfigProperty;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.google.errorprone.annotations.CompileTimeConstant;
 import org.dependencytrack.common.pagination.Page;
@@ -507,7 +508,11 @@ public interface ProjectDao extends SqlObject, PaginationSupport {
             @Nullable UUID parentUuid,
             @Nullable String parentName,
             @Nullable String parentVersion,
-            boolean hasChildren) {}
+            boolean hasChildren,
+            @Json @ColumnName("propertiesJson") @Nullable List<ListProjectsPropertyRowV2> properties) {}
+
+    record ListProjectsPropertyRowV2(
+            String group, String name, @Nullable String value, IConfigProperty.PropertyType type) {}
 
     @SqlQuery(/* language=InjectedFreeMarker */ """
             <#-- @ftlvariable name="includeMetrics" type="boolean" -->
@@ -1012,6 +1017,17 @@ public interface ProjectDao extends SqlObject, PaginationSupport {
                          ON "PROJECTS_TAGS"."PROJECT_ID" = "PROJECT"."ID"
                       WHERE "TAG"."ID" = "PROJECTS_TAGS"."TAG_ID"
                    ) AS "tagNames"
+                 , (
+                     SELECT JSONB_AGG(
+                              JSONB_BUILD_OBJECT(
+                                'group', "PROJECT_PROPERTY"."GROUPNAME"
+                              , 'name', "PROJECT_PROPERTY"."PROPERTYNAME"
+                              , 'value', "PROJECT_PROPERTY"."PROPERTYVALUE"
+                              , 'type', "PROJECT_PROPERTY"."PROPERTYTYPE")
+                              ORDER BY "PROJECT_PROPERTY"."GROUPNAME", "PROJECT_PROPERTY"."PROPERTYNAME")
+                       FROM "PROJECT_PROPERTY"
+                      WHERE "PROJECT_PROPERTY"."PROJECT_ID" = "PROJECT"."ID"
+                   ) AS "propertiesJson"
             <#if includeTeams>
                  , (
                      SELECT ARRAY_AGG("TEAM"."NAME")

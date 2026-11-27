@@ -72,6 +72,12 @@ properties:
       children in the database.
   metrics:
     $ref: "./project-metrics.yaml"
+  properties:
+    type: array
+    description: >-
+      Properties of the project, ordered by group and name. Empty when no properties are set.
+    items:
+      $ref: "./project-property.yaml"
 required:
   - uuid
   - name

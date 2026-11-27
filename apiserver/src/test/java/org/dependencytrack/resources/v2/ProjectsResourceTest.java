@@ -1121,6 +1121,50 @@ public class ProjectsResourceTest extends ResourceTest {
     }
 
     @Test
+    public void listProjectsShouldIncludePropertiesTest() {
+        initializeWithPermissions(Permissions.VIEW_PORTFOLIO);
+
+        final var withProperties = new Project();
+        withProperties.setName("with-properties");
+        qm.persist(withProperties);
+
+        final var withoutProperties = new Project();
+        withoutProperties.setName("without-properties");
+        qm.persist(withoutProperties);
+
+        useJdbiHandle(handle -> {
+            final var dao = handle.attach(ProjectPropertyDao.class);
+            dao.createProperty(
+                    withProperties.getUuid(),
+                    new ProjectPropertyRow("integrations", "engagement.id", "42", PropertyType.INTEGER, "desc"));
+            dao.createProperty(
+                    withProperties.getUuid(),
+                    new ProjectPropertyRow("acme", "enabled", "true", PropertyType.BOOLEAN, null));
+            dao.createProperty(
+                    withProperties.getUuid(),
+                    new ProjectPropertyRow("acme", "empty", null, PropertyType.STRING, null));
+        });
+
+        final Response response = jersey.target("/projects")
+                .request()
+                .header(X_API_KEY, apiKey)
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .inPath("$.items[*].properties")
+                .isEqualTo(/* language=JSON */ """
+                        [
+                          [
+                            {"group": "acme", "name": "empty", "type": "STRING"},
+                            {"group": "acme", "name": "enabled", "value": "true", "type": "BOOLEAN"},
+                            {"group": "integrations", "name": "engagement.id", "value": "42", "type": "INTEGER"}
+                          ],
+                          []
+                        ]
+                        """);
+    }
+
+    @Test
     public void listProjectsPropertyFilterTest() {
         initializeWithPermissions(Permissions.VIEW_PORTFOLIO);
 

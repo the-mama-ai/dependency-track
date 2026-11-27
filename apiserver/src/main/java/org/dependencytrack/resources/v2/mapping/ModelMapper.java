@@ -28,11 +28,13 @@ import org.dependencytrack.api.v2.model.OrganizationalContact;
 import org.dependencytrack.api.v2.model.PackageArtifactMetadata;
 import org.dependencytrack.api.v2.model.PackageMetadata;
 import org.dependencytrack.api.v2.model.ProjectMetrics;
+import org.dependencytrack.api.v2.model.ProjectProperty;
 import org.dependencytrack.api.v2.model.ProjectState;
 import org.dependencytrack.api.v2.model.Scope;
 import org.dependencytrack.api.v2.model.SortDirection;
 import org.dependencytrack.model.Component;
 import org.dependencytrack.model.Project;
+import org.dependencytrack.persistence.jdbi.ProjectDao.ListProjectsPropertyRowV2;
 import org.dependencytrack.persistence.jdbi.ProjectDao.ListProjectsRowV2;
 import org.jspecify.annotations.Nullable;
 
@@ -184,6 +186,25 @@ public class ModelMapper {
                                 : null)
                 .hasChildren(row.hasChildren())
                 .metrics(includeMetrics ? mapProjectMetrics(row.metrics()) : null)
+                .properties(mapProjectProperties(row.properties()))
+                .build();
+    }
+
+    private static List<ProjectProperty> mapProjectProperties(
+            @Nullable List<ListProjectsPropertyRowV2> properties) {
+        if (properties == null) {
+            return List.of();
+        }
+
+        return properties.stream().map(ModelMapper::mapProjectProperty).toList();
+    }
+
+    private static ProjectProperty mapProjectProperty(ListProjectsPropertyRowV2 property) {
+        return ProjectProperty.builder()
+                .group(property.group())
+                .name(property.name())
+                .value(property.value())
+                .type(ProjectProperty.TypeEnum.fromValue(property.type().name()))
                 .build();
     }
 
